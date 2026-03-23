@@ -111,11 +111,98 @@ double entropy(const map<T, long long>& counts, int n) {
     return h / n;
 }
 
+void save_monograms_win1251(ofstream& out, const map<char, long long>& counts, const string& title) {
+    out << "\n=== " << title << " ===\n";
+    vector<pair<char, long long>> sorted_v(counts.begin(), counts.end());
+    sort(sorted_v.begin(), sorted_v.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+        });
+
+    long long total = 0;
+    for (auto const& p : sorted_v) total += p.second;
+
+    out << "Char\tCount\tProbability\n";
+    for (auto const& p : sorted_v) {
+        double prob = (double)p.second / total;
+        if (p.first == ' ') out << "[space]";
+        else out << p.first;
+        out << "\t" << p.second << "\t" << fixed << setprecision(6) << prob << "\n";
+    }
+}
+
+void save_bigrams_win1251(ofstream& out, const string& text_data, const map<string, long long>& bi_counts, const string& title) {
+    out << "\n=== MATRIX: " << title << " ===\n";
+    map<char, int> alphabet_map;
+    for (char c : text_data) alphabet_map[c] = 1;
+
+    vector<char> alphabet;
+    for (auto const& [ch, val] : alphabet_map) alphabet.push_back(ch);
+
+    out << " \t";
+    for (char col : alphabet) out << col << "\t";
+    out << "\n";
+
+    for (char row : alphabet) {
+        out << row << "\t";
+        for (char col : alphabet) {
+            string key = ""; key += row; key += col;
+            out << (bi_counts.count(key) ? bi_counts.at(key) : 0) << "\t";
+        }
+        out << "\n";
+    }
+}
+
+void save_monograms_utf8(ofstream& out, const map<string, long long>& counts, const string& title) {
+    out << "\n=== " << title << " ===\n";
+    vector<pair<string, long long>> sorted_v(counts.begin(), counts.end());
+    sort(sorted_v.begin(), sorted_v.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+        });
+
+    long long total = 0;
+    for (auto const& p : sorted_v) total += p.second;
+
+    out << "Char\tCount\tProbability\n";
+    for (auto const& p : sorted_v) {
+        double prob = (double)p.second / total;
+        if (p.first == " ") out << "[space]";
+        else out << p.first;
+        out << "\t" << p.second << "\t" << fixed << setprecision(6) << prob << "\n";
+    }
+}
+
+void save_bigrams_utf8(ofstream& out, const vector<string>& text_data, const map<string, long long>& bi_counts, const string& title) {
+    out << "\n=== MATRIX: " << title << " ===\n";
+    map<string, int> alphabet_map;
+    for (const string& s : text_data) alphabet_map[s] = 1;
+
+    vector<string> alphabet;
+    for (auto const& [ch, val] : alphabet_map) alphabet.push_back(ch);
+
+    out << " \t";
+    for (const string& col : alphabet) out << col << "\t";
+    out << "\n";
+
+    for (const string& row : alphabet) {
+        out << row << "\t";
+        for (const string& col : alphabet) {
+            string key = row + col;
+            out << (bi_counts.count(key) ? bi_counts.at(key) : 0) << "\t";
+        }
+        out << "\n";
+    }
+}
+
 int main(){
     string filename_wind1251 = "text_for_entropy_Windows.txt"; // Ôאיכ > 1Ìב
     ifstream file_wind1251(filename_wind1251, ios::binary);
     if (!file_wind1251.is_open()) {
         cerr << "ERROR!!! File cannot be open" << endl;
+        return 1;
+    }
+    ofstream res_win("results_windows1251.txt");
+    if (!res_win.is_open()) {
+        cerr << "Could not create results file!" << endl;
         return 1;
     }
     string raw_content_wind1251((istreambuf_iterator<char>(file_wind1251)), istreambuf_iterator<char>());
@@ -129,12 +216,17 @@ int main(){
     cout << "With gapping:" << endl;
     cout << "H_1 (monograms): " << entropy(mono_sp_wind1251, 1) << " bit/symb" << endl;
     cout << "H_2 (bigrams):   " << entropy(bi_sp_wind1251, 2) << " bit/symb" << endl;
+    res_win << "--- WINDOWS-1251 (Mono-)Bigrams ---\n";
+    save_monograms_win1251(res_win, mono_sp_wind1251, "Monograms (Win-1251) with spaces");
+    save_bigrams_win1251(res_win, text_with_sp_wind1251, bi_sp_wind1251, "Bigrams (Win-1251) with spaces");
     string text_no_sp_wind1251 = letter_filter_wind1251(raw_content_wind1251, false);
     auto mono_no_wind1251 = monogram_counter(text_no_sp_wind1251);
     auto bi_no_wind1251 = bigram_counter(text_no_sp_wind1251);
     cout << "Without gapping:" << endl;
     cout << "H_1 (monograms): " << entropy(mono_no_wind1251, 1) << " bit/symb" << endl;
     cout << "H_2 (bigrams):   " << entropy(bi_no_wind1251, 2) << " bit/symb" << endl;
+    save_monograms_win1251(res_win, mono_no_wind1251, "Monograms (Win-1251) without spaces");
+    save_bigrams_win1251(res_win, text_no_sp_wind1251, bi_no_wind1251, "Bigrams (Win-1251) without spaces");
 
     string filename_utf8 = "text_for_entropy_UTF.txt"; // Ôאיכ > 1Ìב
     ifstream file_utf(filename_utf8, ios::binary);
@@ -142,13 +234,15 @@ int main(){
         cerr << "ERROR!!! File cannot be opened: " << filename_utf8 << endl;
         return 1;
     }
+    ofstream res_utf("results_utf8.txt");
+    if (!res_utf.is_open()) {
+        cerr << "Could not create results file!" << endl;
+        return 1;
+    }
     string raw_content_utf8((istreambuf_iterator<char>(file_utf)), istreambuf_iterator<char>());
     file_utf.close();
     // Âטהאכÿ÷למ BOM (Byte Order Mark), ÿךשמ ג³ם ןנטסףעם³י (ןונר³ 3 באיעט UTF-8 פאיכף)
-    if (raw_content_utf8.size() >= 3 &&
-        (unsigned char)raw_content_utf8[0] == 0xEF &&
-        (unsigned char)raw_content_utf8[1] == 0xBB &&
-        (unsigned char)raw_content_utf8[2] == 0xBF) {
+    if (raw_content_utf8.size() >= 3 && (unsigned char)raw_content_utf8[0] == 0xEF && (unsigned char)raw_content_utf8[1] == 0xBB && (unsigned char)raw_content_utf8[2] == 0xBF) {
         raw_content_utf8.erase(0, 3);
     }
     cout << fixed << setprecision(6);
@@ -160,10 +254,15 @@ int main(){
     cout << "With gapping (UTF-8):" << endl;
     cout << "H_1 (monograms): " << fixed << setprecision(6) << entropy(mono_sp_utf8, 1) << " bit/symb" << endl;
     cout << "H_2 (bigrams):   " << entropy(bi_sp_utf8, 2) << " bit/symb" << endl;
+    res_utf << "\n\n--- UTF-8 (Mono-)Bigrams ---\n";
+    save_monograms_utf8(res_utf, mono_sp_utf8, "Monograms (UTF-8) with spaces");
+    save_bigrams_utf8(res_utf, text_with_sp_utf8, bi_sp_utf8, "Bigrams (UTF-8) with spaces");
     vector<string> text_no_sp_utf8 = letter_filter_utf8(raw_content_utf8, false);
     auto mono_no_utf8 = monogram_counter(text_no_sp_utf8);
     auto bi_no_utf8 = bigram_counter(text_no_sp_utf8);
     cout << "Without gapping (UTF-8):" << endl;
     cout << "H_1 (monograms): " << entropy(mono_no_utf8, 1) << " bit/symb" << endl;
     cout << "H_2 (bigrams):   " << entropy(bi_no_utf8, 2) << " bit/symb" << endl;
+    save_monograms_utf8(res_utf, mono_no_utf8, "Monograms (UTF-8) without spaces");
+    save_bigrams_utf8(res_utf, text_no_sp_utf8, bi_no_utf8, "Bigrams (UTF-8) without spaces");
 }
