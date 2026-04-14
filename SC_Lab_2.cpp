@@ -27,21 +27,49 @@ string Vigenere_encrypt(const string& text, const string& key) {
 	return encrypted_text;
 }
 
+double calculate_I_r(const string& text) {
+	int n = text.length();
+	if (n <= 1) return 0.0;
+	string alphabet = "àáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ";
+	vector<long long> counts(32, 0);
+	for (unsigned char c : text) {
+		size_t pos = alphabet.find(c);
+		if (pos != string::npos) counts[pos]++;
+	}
+	long long sum = 0;
+	for (int i = 0; i < 32; i++) sum += counts[i] * (counts[i] - 1);
+	return (double)sum / (n * (n - 1));
+}
+
 int main() {
 	ifstream input_file("plaintext_test.txt");
-	ifstream key_file("key_2_test.txt");
-	if (!input_file.is_open() || !key_file.is_open()) {
-		cerr << "Error!!! Could not open files for encryption" << endl;
+	if (!input_file.is_open()) {
+		cerr << "Error!!! Could not open file for encryption" << endl;
 		return 1;
 	}
-	string plaintext, key;
+	string plaintext;
 	getline(input_file, plaintext);
-	getline(key_file, key);
-	if (plaintext.empty() || key.empty()) {
-		cerr << "Error!!! Text or key is empty" << endl;
+	if (plaintext.empty()) {
+		cerr << "Error!!! Text is empty" << endl;
 		return 1;
 	}
-	string ciphertext = Vigenere_encrypt(plaintext, key);
-	ofstream output_file("ciphertext_test.txt");
-	output_file << ciphertext;
+	double I_plain = calculate_I_r(plaintext);
+	cout << "r = 0 \t I_r = " << I_plain << endl;
+	vector<string> key_files = {"key_2_test.txt", "key_3_test.txt", "key_4_test.txt", "key_5_test.txt", "key_10_test.txt", "key_15_test.txt", "key_20_test.txt"};
+	for (const string& file_name : key_files) {
+		ifstream key_file(file_name);
+		if (!key_file.is_open()) {
+			cerr << "Error!!! Could not open file with key for encryption" << endl;
+			return 1;
+		}
+		string current_key;
+		getline(key_file, current_key);
+		if (current_key.empty()) {
+			cerr << "Error!!! Key is empty" << endl;
+			return 1;
+		}
+		string ciphertext = Vigenere_encrypt(plaintext, current_key);
+		double I_r = calculate_I_r(ciphertext);
+		cout << "r = " << current_key.length() << " \t I_r = " << I_r << endl;
+	}
 }
