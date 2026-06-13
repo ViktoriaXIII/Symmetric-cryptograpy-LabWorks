@@ -34,6 +34,22 @@ string utf8_to_cp1251(const string& utf8) {
     return res;
 }
 
+string cp1251_to_utf8(const string& cp1251) {
+    string res = "";
+    for (unsigned char c : cp1251) {
+        if (c < 128) res += c;
+        else if (c >= 192 && c <= 239) {
+            res += static_cast<char>(0xD0);
+            res += static_cast<char>(c - 48);
+        }
+        else if (c >= 240 && c <= 255) {
+            res += static_cast<char>(0xD1);
+            res += static_cast<char>(c - 112);
+        }
+    }
+    return res;
+}
+
 // ÐÀÅ: x, y : a*x + b*y = gcd(a, b)
 long long EEA(long long a, long long b, long long& x, long long& y) {
     if (b == 0) {
@@ -102,6 +118,14 @@ public:
         long long id2 = p2 / 2;
         return static_cast<long long>((p1 / char_size) * m + (p2 / char_size));
     }
+    string id_to_bigram(long long id) const {
+        int id1 = id / m;
+        int id2 = id % m;
+        string res = "";
+        res += alphabet.substr(id1 * char_size, char_size);
+        res += alphabet.substr(id2 * char_size, char_size);
+        return res;
+    }
 };
 
 vector<KeyCandidate> find_key_candidates(const vector<string>& cipher_top5, const string& alphabet) {
@@ -154,12 +178,48 @@ vector<KeyCandidate> find_key_candidates(const vector<string>& cipher_top5, cons
     return candidates;
 }
 
+bool is_meaningful(const string& text, const string& alphabet) {
+    if (text.empty()) return false;
+    // Impossible combinations
+    static const vector<string> bad_bigrams = { "üü", "ûû", "üû", "ûü" };
+    for (const auto& bad : bad_bigrams) {
+        if (text.find(bad) != string::npos) return false;
+    }
+    // Sum frequency of the top letters
+    long long target_letters_count = 0;
+    for (char c : text) {
+        if (c == 'מ' || c == 'ו' || c == 'א' || c == 'ט' || c == 'ע' || c == 'ם') {
+            target_letters_count++;
+        }
+    }
+    double frequency = static_cast<double>(target_letters_count) / text.length();
+    return frequency > 0.35;
+}
+
+string decrypt_text(const vector<string>& filtered_cipher, long long a, long long b, const BigramConverter& conv) {
+    long long m2 = conv.get_m2();
+    long long a_inv = inv_el(a, m2);
+    if (a_inv == -1) return "";
+    string plaintext = "";
+    for (size_t i = 0; i < filtered_cipher.size(); i += 2) {
+        if (i + 1 >= filtered_cipher.size()) break;
+        string bi = filtered_cipher[i] + filtered_cipher[i + 1];
+        long long Y = conv.bigram_to_id(bi);
+        if (Y == -1) return "";
+        // X = a^(-1) * (Y - b) (mod m^2)
+        long long X = (a_inv * (Y - b % m2 + m2)) % m2;
+        plaintext += conv.id_to_bigram(X);
+    }
+    return plaintext;
+}
+
 int main()
 {
     SetConsoleCP(65001);       // Äכÿ גגוהוםםÿ (םא גסÿךטי גטןאהמך)
     SetConsoleOutputCP(65001);
     string alphabet1 = "אבגדהוזחטיךכלםמןנסעףפץצקרשûü‎‏ÿ";
     string alphabet2 = "אבגדהוזחטיךכלםמןנסעףפץצקרשüû‎‏ÿ";
+    vector<string> alphabets = { alphabet1, alphabet2 };
     string filename = "V13";
     ifstream file(filename);
     if (!file.is_open()) {
@@ -175,15 +235,37 @@ int main()
         return 0;
     }
     vector<string> top_bigrams = BigramAnalyzer::get_top_5_bigrams_utf8(ciphertext);
+    vector<string> filtered_cipher_utf8 = BigramAnalyzer::letter_filter_utf8(ciphertext, false);
     cout << "Top-5 bigrams of the file:\n";
     if (top_bigrams.empty()) cout << "Cannot find any\n";
     else {
         for (size_t i = 0; i < top_bigrams.size(); ++i) cout << i + 1 << ": \"" << top_bigrams[i] << "\"\n";
     }
     cout << "--------------------------------------------------\n";
-    vector<KeyCandidate> keys = find_key_candidates(top_bigrams, alphabet1);
-    cout << "Some examples of the keys:\n";
-    for (size_t i = 0; i < keys.size() && i < 10; ++i) {
-        cout << i + 1 << ": a = " << keys[i].a << ", b = " << keys[i].b << "\n";
+    for (size_t alpha_idx = 0; alpha_idx < alphabets.size(); ++alpha_idx) {
+        string current_alphabet = alphabets[alpha_idx];
+        bool is_src_utf8 = (current_alphabet.length() == 62);
+        vector<string> localized_text = filtered_cipher_utf8;
+        if (!is_src_utf8) for (auto& ch : localized_text) ch = utf8_to_cp1251(ch);
+        BigramConverter conv(current_alphabet);
+        vector<KeyCandidate> keys = find_key_candidates(top_bigrams, current_alphabet);
+        cout << "Some examples of the keys:\n";
+        for (size_t i = 0; i < keys.size() && i < 10; ++i) cout << i + 1 << ": a = " << keys[i].a << ", b = " << keys[i].b << "\n";
+        for (const auto& key : keys) {
+            string decrypted = decrypt_text(localized_text, key.a, key.b, conv);
+
+            if (is_meaningful(decrypted, current_alphabet)) {
+                cout << "Decryption is correct!\n";
+                cout << "Alphabet " << alpha_idx + 1 << "was used" << "\n";
+                cout << "Key: a = " << key.a << ", b = " << key.b << "\n";
+                cout << "--------------------------------------------------\n";
+                cout << "Text:\n";
+                if (!is_src_utf8) cout << cp1251_to_utf8(decrypted) << "\n";
+                else cout << decrypted << "\n";
+                cout << "--------------------------------------------------\n";
+                return 0;
+            }
+        }
     }
+    cout << "Cannot decrypt the file\n";
 }
